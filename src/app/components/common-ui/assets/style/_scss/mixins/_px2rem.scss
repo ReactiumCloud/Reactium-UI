@@ -16,6 +16,6 @@ $root-font: 16px !default;
 @function px2vw($px) {
     $rnum: 1920;
     $fnum: strip-units($px);
-    $vw: math.div($fnum / $rnum) * 100;
+    $vw: math.div($fnum, $rnum) * 100;
     @return #{$vw}vw;
 }
