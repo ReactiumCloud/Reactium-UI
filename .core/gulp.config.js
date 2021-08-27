@@ -2,10 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const globby = require('globby');
+const globby = require('./globby-patch');
 const rootPath = path.resolve(__dirname, '..');
 
 const defaultConfig = {
+    rootPath,
     entries: globby
         .sync('./src/app/*.js')
         .map(p => path.resolve(p))
@@ -19,39 +20,37 @@ const defaultConfig = {
         browsersync: 3000,
         proxy: 3030,
     },
+    serverRetries: 4,
+    serverRetryDelay: 2000,
     open: true,
     cssPreProcessor: 'sass',
     watch: {
-        js: ['src/app/**/*'],
-        markup: ['src/**/*.html', 'src/**/*.css'],
+        js: ['src/app/**/*', 'reactium_modules/**/*'],
+        markup: ['src/**/*.html', 'src/**/*.css', 'reactium_modules/**/*.css'],
         colors: ['src/**/*/colors.json'],
         pluginAssets: ['src/app/**/plugin-assets.json'],
         restartWatches: [
             'src/**/assets/style/*.less',
             'src/**/assets/style/*.scss',
-            'src/**/assets/style/*.sass',
-            '.core/components/Toolkit/style.scss',
             '!src/**/assets/style/_*.less',
             '!src/**/assets/style/_*.scss',
-            '!src/**/assets/style/_*.sass',
         ],
         style: [
             'src/**/*.less',
             'src/**/*.scss',
-            'src/**/*.sass',
             '.core/**/*.less',
             '.core/**/*.scss',
-            '.core/**/*.sass',
+            'reactium_modules/**/*.scss',
             '!{src/**/assets/style/*.less}',
             '!{src/**/assets/style/*.scss}',
-            '!{src/**/assets/style/*.sass}',
-            '!{.core/components/Toolkit/style.scss}',
+            '!{reactium_modules/**/assets/style/*.scss}',
         ],
         assets: [
             'src/**/assets/**/*',
             'src/assets/**/*',
-            '!{src/**/*/assets/style,src/**/*/assets/style/**}',
-            '!{src/**/*/assets/js,src/**/*/assets/js/**}',
+            'reactium_modules/**/assets/**/*',
+            '!{src/**/*/assets/style,src/**/*/assets/style/**,reactium_modules/**/assets/style/**}',
+            '!{src/**/*/assets/js,src/**/*/assets/js/**,reactium_modules/**/assets/js/**}',
             '!{src/assets/style,src/assets/style/**}',
             '!{src/assets/js,src/assets/js/**}',
         ],
@@ -64,19 +63,22 @@ const defaultConfig = {
         pluginAssets: ['src/app/**/plugin-assets.json'],
         js: ['src/app/**/*'],
         json: ['src/**/*.json'],
-        markup: ['src/**/*.html', 'src/**/*.css'],
+        markup: ['src/**/*.html', 'src/**/*.css', 'reactium_modules/**/*.css'],
         style: [
             'src/**/*.scss',
             '.core/**/*.scss',
+            'reactium_modules/**/*.scss',
             '!{src/**/_*.scss}',
             '!{.core/**/_*.scss}',
+            '!{reactium_modules/**/_*.scss}',
         ],
         assets: [
             '.core/assets/**/*',
             'src/**/assets/**/*',
+            'reactium_modules/**/assets/**/*',
             'src/assets/**/*',
-            '!{src/**/*/assets/style,src/**/*/assets/style/**}',
-            '!{src/**/*/assets/js,src/**/*/assets/js/**}',
+            '!{src/**/*/assets/style,src/**/*/assets/style/**,reactium_modules/**/assets/style/**}',
+            '!{src/**/*/assets/js,src/**/*/assets/js/**,reactium_modules/**/assets/js/**}',
             '!{src/assets/style,src/assets/style/**}',
             '!{src/assets/js,src/assets/js/**}',
         ],
@@ -90,6 +92,9 @@ const defaultConfig = {
         appdir: path.resolve(__dirname, 'src/app'),
         rootdir: path.resolve(__dirname),
         manifest: path.normalize(`${rootPath}/src/manifest.js`),
+        externalsManifest: path.normalize(
+            `${rootPath}/.tmp/externals-manifest.js`,
+        ),
         reactiumModules: path.normalize(`${rootPath}/reactium_modules`),
     },
     dest: {
@@ -116,10 +121,8 @@ const defaultConfig = {
     sw: {
         globDirectory: 'public',
         globPatterns: ['**/*.{html,js,css,js.gz,css.gz}'],
-        globIgnores: ['**/index-static.html'],
+        globIgnores: ['**/index-static.html', 'docs/**/*', 'assets/js/sw/**/*'],
         swDest: 'public/assets/js/sw/sw.js',
-        clientsClaim: true,
-        skipWaiting: true,
         modifyURLPrefix: {
             assets: '/assets',
         },
@@ -129,11 +132,33 @@ const defaultConfig = {
         dest: ['public/docs', 'docs'],
         verbose: false,
     },
+    buildTasks: [
+        'preBuild',
+        'ensureReactiumModules',
+        'clean',
+        'manifest',
+        ['markup', 'json'],
+        ['assets', 'styles'],
+        'scripts',
+        'umdLibraries',
+        'serviceWorker',
+        'compress',
+        'apidocs',
+        'postBuild',
+    ],
 };
 
-let gulpConfigOverride = _ => _;
-if (fs.existsSync(`${rootPath}/gulp.config.override.js`)) {
-    gulpConfigOverride = require(`${rootPath}/gulp.config.override.js`);
-}
+const overrides = config => {
+    globby
+        .sync([
+            './gulp.config.override.js',
+            './node_modules/**/reactium-plugin/gulp.config.override.js',
+            './src/**/gulp.config.override.js',
+            './reactium_modules/**/gulp.config.override.js',
+        ])
+        .forEach(file => require(path.resolve(file))(config));
 
-module.exports = gulpConfigOverride(defaultConfig);
+    return config;
+};
+
+module.exports = overrides(defaultConfig);

@@ -1,20 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const globby = require('./globby-patch');
 const rootPath = path.resolve(__dirname, '..');
 const gulpConfig = require('./gulp.config');
 
-const version = '3.3.3';
-
-const contextMode = () => {
-    if (
-        process.env.NODE_ENV !== 'development' &&
-        process.env.LAZY_GET_COMPONENTS !== 'off'
-    ) {
-        return 'lazy-once';
-    }
-
-    return 'sync';
-};
+const version = '4.1.4';
 
 const defaultLibraryExternals = {
     axios: {
@@ -29,14 +19,17 @@ const defaultLibraryExternals = {
         externalName: 'copy-to-clipboard',
         requirePath: 'copy-to-clipboard',
     },
-    'gsap/umd/TweenMax': {
-        externalName: '/^gsap.*$/',
-        requirePath: 'gsap/umd/TweenMax',
-    },
+
     moment: {
         externalName: 'moment',
-        requirePath: 'moment',
+        requirePath: 'dayjs',
     },
+
+    dayjs: {
+        externalName: 'dayjs',
+        requirePath: 'dayjs',
+    },
+
     'object-path': {
         externalName: 'object-path',
         requirePath: 'object-path',
@@ -54,14 +47,6 @@ const defaultLibraryExternals = {
     'react-router-dom': {
         externalName: 'react-router-dom',
         requirePath: 'react-router-dom',
-    },
-    redux: {
-        externalName: 'redux',
-        requirePath: 'redux',
-    },
-    'redux-super-thunk': {
-        externalName: 'redux-super-thunk',
-        requirePath: 'redux-super-thunk',
     },
     ReactDOM: {
         externalName: 'react-dom',
@@ -101,27 +86,6 @@ const defaultLibraryExternals = {
 const defaultManifestConfig = {
     patterns: [
         {
-            name: 'allActions',
-            type: 'actions',
-            pattern: /actions.jsx?$/,
-            ignore: /\.cli/,
-        },
-        {
-            name: 'allActionTypes',
-            type: 'actionTypes',
-            pattern: /actionTypes.jsx?$/,
-        },
-        {
-            name: 'allReducers',
-            type: 'reducers',
-            pattern: /reducers.jsx?$/,
-        },
-        {
-            name: 'allInitialStates',
-            type: 'state',
-            pattern: /state.jsx?$/,
-        },
-        {
             name: 'allRoutes',
             type: 'route',
             pattern: /route.jsx?$/,
@@ -130,17 +94,6 @@ const defaultManifestConfig = {
             name: 'allServices',
             type: 'services',
             pattern: /services.jsx?$/,
-        },
-        {
-            name: 'allMiddleware',
-            type: 'middleware',
-            pattern: /middleware.jsx?$/,
-            ignore: /server\/middleware/,
-        },
-        {
-            name: 'allEnhancers',
-            type: 'enhancer',
-            pattern: /enhancer.jsx?$/,
         },
         {
             name: 'allPlugins',
@@ -156,7 +109,7 @@ const defaultManifestConfig = {
     sourceMappings: [
         {
             from: 'src/app/',
-            to: '',
+            to: '../src/app/',
         },
         {
             from: '.core/',
@@ -172,28 +125,6 @@ const defaultManifestConfig = {
         },
     ],
     pluginExternals: defaultLibraryExternals,
-    contexts: {
-        components: {
-            modulePath: 'components',
-            filePattern: '.js?$',
-            mode: contextMode(),
-        },
-        common: {
-            modulePath: 'components/common-ui/',
-            filePattern: '.js?$',
-            mode: contextMode(),
-        },
-        toolkit: {
-            modulePath: 'toolkit',
-            filePattern: '.js?$',
-            mode: contextMode(),
-        },
-        core: {
-            modulePath: 'reactium-core/components',
-            filePattern: '.js?$',
-            mode: contextMode(),
-        },
-    },
     umd: {
         defaultLibraryExternals,
         patterns: [
@@ -223,22 +154,24 @@ const defaultManifestConfig = {
         ],
         searchParams: {
             extensions: /\.(js|json)$/,
-            exclude: [
-                /.ds_store/i,
-                /.core/i,
-                /.cli\//i,
-                /src\/assets/,
-                /src\/app\/toolkit/,
-            ],
+            exclude: [/.ds_store/i, /.core/i, /.cli\//i, /src\/assets/],
         },
     },
 };
 
-let manifestConfigOverride = _ => _;
-if (fs.existsSync(`${rootPath}/manifest.config.override.js`)) {
-    manifestConfigOverride = require(`${rootPath}/manifest.config.override.js`);
-}
-const manifestConfig = manifestConfigOverride(defaultManifestConfig);
+const overrides = config => {
+    globby
+        .sync([
+            './manifest.config.override.js',
+            './node_modules/**/reactium-plugin/manifest.config.override.js',
+            './src/**/manifest.config.override.js',
+            './reactium_modules/**/manifest.config.override.js',
+        ])
+        .forEach(file => require(path.resolve(file))(config));
+    return config;
+};
+
+const manifestConfig = overrides(defaultManifestConfig);
 
 /**
  * Use liberally for additional core configuration.
@@ -376,15 +309,51 @@ module.exports = {
                 },
                 {
                     overwrite: false,
-                    version: '>=3.2.1',
-                    destination: '/flow-typed',
-                    source: '/tmp/update/flow-typed',
-                },
-                {
-                    overwrite: false,
                     version: '>=3.2.2',
                     destination: '/.huskyrc',
                     source: '/tmp/update/.huskyrc',
+                },
+                {
+                    overwrite: false,
+                    version: '>=3.4.2',
+                    destination: '/src/app/api/reactium-hooks.js',
+                    source: '/tmp/update/src/app/api/reactium-hooks.js',
+                },
+                {
+                    overwrite: false,
+                    version: '>=3.4.2',
+                    destination: '/src/app/api/index.js',
+                    source: '/tmp/update/src/app/api/index.js',
+                },
+                {
+                    overwrite: false,
+                    version: '>=3.4.2',
+                    destination: '/src/app/api/domain.js',
+                    source: '/tmp/update/src/app/api/domain.js',
+                },
+                {
+                    overwrite: false,
+                    version: '>=3.4.2',
+                    destination: '/.npmrc',
+                    source: '/tmp/update/.npmrc',
+                },
+                {
+                    overwrite: true,
+                    version: '>=3.5.1',
+                    destination: '/src/sw',
+                    source: '/tmp/update/src/sw',
+                },
+                {
+                    overwrite: true,
+                    version: '>=3.5.1',
+                    destination: '/src/app/main.js',
+                    source: '/tmp/update/src/app/main.js',
+                },
+                {
+                    overwrite: true,
+                    version: '>=3.6.0',
+                    destination: '/.dockerignore',
+                    source: '/tmp/update/.dockerignore',
                 },
             ],
             remove: [],

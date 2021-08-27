@@ -15,7 +15,11 @@ if (module.hot) {
     };
 
     module.hot.accept(
-        ['../.././.core/dependencies/index.js', '../.././.core/app.js'],
+        [
+            '../.././.core/dependencies/index.js',
+            '../.././.core/app.js',
+            '../.././.core/sdk/index.js',
+        ],
         () => {
             window.location.reload();
         },

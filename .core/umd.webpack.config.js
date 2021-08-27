@@ -1,19 +1,44 @@
 const fs = require('fs');
 const path = require('path');
-const env = process.env.NODE_ENV || 'development';
-const rootPath = path.resolve(__dirname, '..');
-const CompressionPlugin = require('compression-webpack-plugin');
+const globby = require('./globby-patch');
 const op = require('object-path');
+const rootPath = path.resolve(__dirname, '..');
+const env = process.env.NODE_ENV || 'development';
+const CompressionPlugin = require('compression-webpack-plugin');
+const webpack = require('webpack');
+const WebpackSDK = require('./webpack.sdk');
+
+const overrides = (umd, config) => {
+    globby
+        .sync([
+            './umd.webpack.override.js',
+            './node_modules/**/reactium-plugin/umd.webpack.override.js',
+            './src/**/umd.webpack.override.js',
+            './reactium_modules/**/umd.webpack.override.js',
+        ])
+        .forEach(file => {
+            try {
+                require(path.resolve(file))(umd, config);
+            } catch (error) {
+                console.error(chalk.red(`Error loading ${file}:`));
+                console.error(error);
+            }
+        });
+    return config;
+};
 
 module.exports = umd => {
+    const sdk = new WebpackSDK(umd.libraryName, 'reactium-webpack.js', umd);
+
     const plugins = [];
     const presets = [];
     const rules = [];
+    const defines = op.get(umd, 'staticDefines', {});
 
     if (op.get(umd, 'babelPresetEnv', true)) presets.push('@babel/preset-env');
     if (op.get(umd, 'babelReact', true)) presets.push('@babel/react');
     if (op.get(umd, 'babelLoader', true))
-        rules.push({
+        sdk.addRule('babel-loader', {
             test: /(\.jsx|\.js)$/,
             loader: 'babel-loader',
             options: {
@@ -30,45 +55,41 @@ module.exports = umd => {
             },
         });
 
+    if (op.get(umd, 'workerRestAPI', true)) {
+        op.set(
+            defines,
+            'workerRestAPIConfig',
+            JSON.stringify({
+                actiniumAppId: process.env.ACTINIUM_APP_ID || 'Actinium',
+                restAPI: process.env.WORKER_REST_API_URL || '/api',
+            }),
+        );
+    }
+
     const externals = [];
     Object.entries(umd.externals).forEach(([key, value]) => {
-        // regex key
-        if (/^\/.*\/i?$/.test(key)) {
-            const args = [key.replace(/^\//, '').replace(/\/i?$/, '')];
-            if (/i$/.test(key)) args.push('i');
-            externals.push(new RegExp(...args));
-            return externals;
-        }
-        externals.push(value);
+        sdk.addExternal(key, { key, value });
     });
 
-    const config = {
-        mode: env,
-        entry: umd.entry,
-        output: {
-            path: umd.outputPath,
-            filename: umd.outputFile,
-            library: umd.libraryName,
-            libraryTarget: 'umd',
-            globalObject: umd.globalObject,
-        },
-        module: {
-            rules,
-        },
-        externals,
-        plugins,
+    if (op.get(umd, 'addDefines', true)) {
+        sdk.addPlugin('defines', new webpack.DefinePlugin(defines));
+    }
+
+    sdk.mode = env;
+    sdk.entry = umd.entry;
+    sdk.output = {
+        path: umd.outputPath,
+        filename: umd.outputFile,
+        library: umd.libraryName,
+        libraryTarget: 'umd',
+        globalObject: umd.globalObject,
     };
 
     if (env === 'production') {
-        plugins.push(new CompressionPlugin());
+        sdk.addPlugin('compression', new CompressionPlugin());
     } else if (op.get(umd, 'sourcemaps', true)) {
-        config.devtool = 'inline-source-map';
+        sdk.devtool = 'cheap-source-map';
     }
 
-    let override = (umd, config) => config;
-    if (fs.existsSync(`${rootPath}/umd.webpack.override.js`)) {
-        override = require(`${rootPath}/umd.webpack.override.js`);
-    }
-
-    return override(umd, config);
+    return overrides(umd, sdk.config());
 };

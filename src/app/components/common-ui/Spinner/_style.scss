@@ -1,3 +1,5 @@
+@use 'sass:math';
+
 $ar-spinner-color: $color-blue;
 $ar-spinner-size: 64px;
 
@@ -26,7 +28,7 @@ $ar-spinner-size: 64px;
 
     div {
         animation: ar-spinner 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-        transform-origin: $ar-spinner-size/2 $ar-spinner-size/2;
+        transform-origin: math.div($ar-spinner-size, 2) math.div($ar-spinner-size, 2);
     }
 
     div:after {

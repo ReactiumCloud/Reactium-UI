@@ -1,3 +1,5 @@
+@use 'sass:math';
+
 $ar-checkpoint-border-size: 3px !default;
 $ar-checkpoint-color-active: $color-white !default;
 $ar-checkpoint-color-border: $color-grey !default;
@@ -18,7 +20,7 @@ $ar-checkponit-trans-bar: .25s ease-in-out !default;
 
 @mixin checkpointsLine() {
     position: absolute;
-    top: $ar-checkpoint-height-icon/2;
+    top: math.div($ar-checkpoint-height-icon, 2);
     left: 50%;
     height: $ar-checkpoint-height-line;
     overflow: hidden;
